@@ -130,10 +130,31 @@ impl Brainfuck {
     //Optimize increments/ptr movements
     {
       #[derive(Clone, Copy, PartialEq, Eq)]
-
       enum BlockEffect {
         Increment(isize),
         Set(u8),
+      }
+      trait BlockCommit {
+        fn opcode(&self) -> Option<Opcode>;
+        fn commit(&self, ops: &mut Vec<Opcode>);
+      }
+      impl BlockCommit for (&isize, &BlockEffect) {
+        fn opcode(&self) -> Option<Opcode> {
+          match self.1 {
+            BlockEffect::Increment(increment) => {
+              if *increment == 0 { return None }
+              Some(Opcode::Increment(*self.0, *increment))
+            },
+            BlockEffect::Set(value) => {
+              Some(Opcode::Set(*self.0, *value))
+            },
+          }
+        }
+        fn commit(&self, ops: &mut Vec<Opcode>) {
+          if let Some(op) = self.opcode() {
+            ops.push(op);
+          }
+        }
       }
       let mut block_effects: HashMap<isize, BlockEffect> = HashMap::new();
       let mut ptr_offset: isize = 0;
@@ -165,17 +186,10 @@ impl Brainfuck {
           Opcode::Output(out_offset) | Opcode::Input(out_offset) => {
             //THIS IS EXPERIMENTAL!
             //Partial commit: commit only operations related to the current cell
-            //TODO: fix code duplication
-            let relative_pos = &(ptr_offset + out_offset);
             //TODO: maybe do not remove the effect if its "Set"? (probably special value should be used to indicate that the set is already committed?)
+            let relative_pos = &(ptr_offset + out_offset);
             if let Some(ref effect) = block_effects.remove(relative_pos) {
-              output_ops.push(match effect {
-                BlockEffect::Increment(increment) => {
-                  if *increment == 0 { continue }
-                  Opcode::Increment(*relative_pos, *increment)
-                },
-                BlockEffect::Set(value) => Opcode::Set(*relative_pos, *value),
-              });
+              (relative_pos, effect).commit(&mut output_ops);
             }
             output_ops.push(match op {
               Opcode::Output(_) => Opcode::Output(*relative_pos),
@@ -197,14 +211,8 @@ impl Brainfuck {
               }
             }
             //commit increments and pointer movements
-            for (relative_pos, effect) in block_effects.iter().sorted_by_key(|x| *x.0) {
-              output_ops.push(match effect {
-                BlockEffect::Increment(increment) => {
-                  if *increment == 0 { continue }
-                  Opcode::Increment(*relative_pos, *increment)
-                },
-                BlockEffect::Set(value) => Opcode::Set(*relative_pos, *value),
-              })
+            for effect in block_effects.iter().sorted_by_key(|x| *x.0) {
+              effect.commit(&mut output_ops);
             }
             if ptr_offset != 0 {
               output_ops.push(Opcode::MovePointer(ptr_offset));
