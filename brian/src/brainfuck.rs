@@ -211,7 +211,7 @@ impl Brainfuck {
               }
             }
             //commit increments and pointer movements
-            for effect in block_effects.iter().sorted_by_key(|x| *x.0) {
+            for effect in &block_effects {
               effect.commit(&mut output_ops);
             }
             if ptr_offset != 0 {
