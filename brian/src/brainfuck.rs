@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use arrayvec::ArrayVec;
 use itertools::Itertools;
 #[cfg(feature = "serde")]
@@ -125,11 +127,22 @@ impl Brainfuck {
   /// Compile a brainfuck source
   pub fn compile(&mut self, code: &str) {
     let ops: Vec<Opcode> = brainfuck_tokens(code).map(Opcode::from).collect();
-    let mut ptr_offset = 0;
-    let mut prev_op = None;
-    for op in ops {
+    let mut output_ops: Vec<Opcode> = Vec::new();
+    let mut ptr_offset: isize = 0;
+    let mut block_increments: HashMap<isize, isize> = HashMap::new();
+    for op in &ops {
+      match &op {
+        Opcode::IncrementRelative(pos, value) => {
+          block_increments.insert(*pos, *value);
+        }
+        Opcode::Input | Opcode::Output | Opcode::LoopStart | Opcode::LoopEnd => {
+
+        },
+      }
+      block_increments.
       prev_op = Some(op);
     }
+    println!("{:?}", &ops);
   }
 
   ///Run optimized bf source
