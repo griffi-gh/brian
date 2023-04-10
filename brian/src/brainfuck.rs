@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use std::{collections::HashMap};
 use arrayvec::ArrayVec;
 use itertools::Itertools;
 #[cfg(feature = "serde")]
@@ -25,29 +24,27 @@ pub enum Token {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Opcode {
-  IncrementRelative(isize, isize),
-  SetRelative(isize, u8),
+  Increment(isize, isize),
+  Set(isize, u8),
   MovePointer(isize),
-  LoopStart,
-  LoopEnd,
-  LinkedLoopStart(usize),
-  LinkedLoopEnd(usize),
-  Output,
-  Input,
-  Move(usize, ArrayVec::<usize, 16>),
+  LoopStart(Option<usize>),
+  LoopEnd(Option<usize>),
+  Output(isize),
+  Input(isize),
+  //Move(usize, ArrayVec::<usize, 16>),
   Eof,
 }
 impl From<Token> for Opcode {
   fn from(value: Token) -> Self {
     match value {
-      Token::Increment => Self::IncrementRelative(0, 1),
-      Token::Decrement => Self::IncrementRelative(0, -1),
+      Token::Increment => Self::Increment(0, 1),
+      Token::Decrement => Self::Increment(0, -1),
       Token::MovePointerLeft => Self::MovePointer(-1),
       Token::MovePointerRight => Self::MovePointer(1),
-      Token::LoopStart => Self::LoopStart,
-      Token::LoopEnd => Self::LoopEnd,
-      Token::Output => Self::Output,
-      Token::Input => Self::Input,
+      Token::LoopStart => Self::LoopStart(None),
+      Token::LoopEnd => Self::LoopEnd(None),
+      Token::Output => Self::Output(0),
+      Token::Input => Self::Input(0),
     }
   }
 }
@@ -126,32 +123,34 @@ impl Brainfuck {
 
   fn optimize(ops: Vec<Opcode>) -> Vec<Opcode> {
     let mut output_ops: Vec<Opcode> = Vec::new();
+
+    //TODO: check for eof token and add it
+    //TODO: recursive block compilation
+
+    //Optimize increments/ptr movements
     {
       #[derive(Clone, Copy, PartialEq, Eq)]
+
       enum BlockEffect {
         Increment(isize),
-        Set(u8)
+        Set(u8),
       }
-      let mut ptr_offset: isize = 0;
       let mut block_effects: HashMap<isize, BlockEffect> = HashMap::new();
-      //TODO: unlink loops
-      //TODO: check for eof token and add it
-      //TODO: recursive block compilation
-      //TODO: replace output and input with relative versions
-      //Optimize increments/ptr movements
+      let mut ptr_offset: isize = 0;
       let mut index = 0;
+
       while index < ops.len() {
         let op = &ops[index];
         index += 1;
         match op {
-          Opcode::IncrementRelative(offset, increment) => {
+          Opcode::Increment(offset, increment) => {
             let existing_effect = block_effects.get_mut(&ptr_offset);
             match existing_effect {
               Some(BlockEffect::Increment(effect)) => {
                 *effect += increment;
               },
               Some(BlockEffect::Set(effect)) => {
-                //TODO casting isize to i8 can cause unexpected behaviour here!
+                //TODO: casting isize to i8 can cause unexpected behaviour here! (but it's not likely to break)
                 *effect = effect.wrapping_add_signed(*increment as i8);
               },
               None => {
@@ -163,11 +162,32 @@ impl Brainfuck {
           Opcode::MovePointer(diff) => {
             ptr_offset += *diff;
           },
-          Opcode::Eof | Opcode::Input | Opcode::Output | Opcode::LoopStart | Opcode::LoopEnd => {
+          Opcode::Output(out_offset) | Opcode::Input(out_offset) => {
+            //THIS IS EXPERIMENTAL!
+            //Partial commit: commit only operations related to the current cell
+            //TODO: fix code duplication
+            let relative_pos = &(ptr_offset + out_offset);
+            //TODO: maybe do not remove the effect if its "Set"? (probably special value should be used to indicate that the set is already committed?)
+            if let Some(ref effect) = block_effects.remove(relative_pos) {
+              output_ops.push(match effect {
+                BlockEffect::Increment(increment) => {
+                  if *increment == 0 { continue }
+                  Opcode::Increment(*relative_pos, *increment)
+                },
+                BlockEffect::Set(value) => Opcode::Set(*relative_pos, *value),
+              });
+            }
+            output_ops.push(match op {
+              Opcode::Output(_) => Opcode::Output(*relative_pos),
+              Opcode::Input(_) => Opcode::Input(*relative_pos),
+              _ => unreachable!()
+            })
+          }
+          Opcode::Eof | Opcode::LoopStart(_) | Opcode::LoopEnd(_) => {
             //Detect [-]/[+] loops (TODO compute block effects instead!)
-            if let Opcode::LoopStart = op {
-              if let Opcode::LoopEnd = ops[index + 1] {
-                if let Opcode::IncrementRelative(pos, value) = ops[index] {
+            if let Opcode::LoopStart(_) = op {
+              if let Opcode::LoopEnd(_) = ops[index + 1] {
+                if let Opcode::Increment(pos, value) = ops[index] {
                   if pos == 0 && value.abs() % 2 == 1 {
                     index += 2;
                     block_effects.insert(ptr_offset, BlockEffect::Set(0));
@@ -181,9 +201,9 @@ impl Brainfuck {
               output_ops.push(match effect {
                 BlockEffect::Increment(increment) => {
                   if *increment == 0 { continue }
-                  Opcode::IncrementRelative(*relative_pos, *increment)
+                  Opcode::Increment(*relative_pos, *increment)
                 },
-                BlockEffect::Set(value) => Opcode::SetRelative(*relative_pos, *value),
+                BlockEffect::Set(value) => Opcode::Set(*relative_pos, *value),
               })
             }
             if ptr_offset != 0 {
@@ -207,13 +227,13 @@ impl Brainfuck {
         let (output_ops_before, op) = output_ops.split_at_mut(index);
         let op = &mut op[0];
         match op {
-          Opcode::LoopStart => {
+          Opcode::LoopStart(_) => {
             stack.push(index);
           },
-          Opcode::LoopEnd => {
+          Opcode::LoopEnd(_) => {
             let start_index = stack.pop().expect("Unexpected loop end");
-            output_ops_before[start_index] = Opcode::LinkedLoopStart(index);
-            *op = Opcode::LinkedLoopEnd(start_index);
+            output_ops_before[start_index] = Opcode::LoopStart(Some(index));
+            *op = Opcode::LoopEnd(Some(start_index));
           }
           _ => ()
         }
