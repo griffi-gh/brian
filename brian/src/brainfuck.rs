@@ -137,6 +137,7 @@ impl Brainfuck {
       //TODO: unlink loops
       //TODO: check for eof token and add it
       //TODO: recursive block compilation
+      //TODO: replace output and input with relative versions
       //Optimize increments/ptr movements
       let mut index = 0;
       while index < ops.len() {
@@ -160,7 +161,7 @@ impl Brainfuck {
             //block_effects.insert(offset + ptr_offset, existing_value + increment);
           }
           Opcode::MovePointer(diff) => {
-            ptr_offset += diff;
+            ptr_offset += *diff;
           },
           Opcode::Eof | Opcode::Input | Opcode::Output | Opcode::LoopStart | Opcode::LoopEnd => {
             //Detect [-]/[+] loops (TODO compute block effects instead!)
