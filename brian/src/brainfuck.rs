@@ -198,7 +198,9 @@ impl Brainfuck {
             })
           }
           Opcode::Eof | Opcode::LoopStart(_) | Opcode::LoopEnd(_) => {
-            //Detect [-]/[+] loops (TODO compute block effects instead!)
+            //Detect [-]/[+] loops 
+            //TODO: compute block effects instead!
+            //TODO: at least compute pointer movement? (to allow [<->]) (recursive comp is preferable)
             if let Opcode::LoopStart(_) = op {
               if let Opcode::LoopEnd(_) = ops[index + 1] {
                 if let Opcode::Increment(pos, value) = ops[index] {
