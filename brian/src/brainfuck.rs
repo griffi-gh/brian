@@ -26,11 +26,27 @@ pub enum Opcode {
   IncrementRelative(isize, isize),
   SetRelative(isize, usize),
   MovePointer(isize),
-  LoopStart(usize),
-  LoopEnd(usize),
+  LoopStart,
+  LoopEnd,
+  LinkedLoopStart(usize),
+  LinkedLoopEnd(usize),
   Output,
   Input,
   Move(usize, ArrayVec::<usize, 16>),
+}
+impl From<Token> for Opcode {
+  fn from(value: Token) -> Self {
+    match value {
+      Token::Increment => Self::IncrementRelative(0, 1),
+      Token::Decrement => Self::IncrementRelative(0, -1),
+      Token::MovePointerLeft => Self::MovePointer(-1),
+      Token::MovePointerRight => Self::MovePointer(1),
+      Token::LoopStart => Self::LoopStart,
+      Token::LoopEnd => Self::LoopEnd,
+      Token::Output => Self::Output,
+      Token::Input => Self::Input,
+    }
+  }
 }
 
 fn brainfuck_tokens(code: &str) -> impl Iterator<Item=Token> + '_ {
@@ -47,6 +63,7 @@ fn brainfuck_tokens(code: &str) -> impl Iterator<Item=Token> + '_ {
   })
 }
 
+#[derive(Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BrainfuckState {
   pub memory: [u8; MEMORY_SIZE],
@@ -67,6 +84,7 @@ impl Default for BrainfuckState {
 }
 
 /// Brainfuck interpreter
+#[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Brainfuck {
   state: BrainfuckState,
@@ -106,8 +124,12 @@ impl Brainfuck {
 
   /// Compile a brainfuck source
   pub fn compile(&mut self, code: &str) {
-    let _ = brainfuck_tokens(code)
-      .group_by(|&x| matches!(x, Token::LoopStart | Token::LoopEnd));
+    let ops: Vec<Opcode> = brainfuck_tokens(code).map(Opcode::from).collect();
+    let mut ptr_offset = 0;
+    let mut prev_op = None;
+    for op in ops {
+      prev_op = Some(op);
+    }
   }
 
   ///Run optimized bf source
