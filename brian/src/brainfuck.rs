@@ -186,8 +186,9 @@ impl Brainfuck {
                 BlockEffect::Set(value) => Opcode::SetRelative(*relative_pos, *value),
               })
             }
-            if ptr_offset > 0 {
+            if ptr_offset != 0 {
               output_ops.push(Opcode::MovePointer(ptr_offset));
+              ptr_offset = 0;
             }
             //TODO: figure out a way to avoid clone (low prio; opt times arent that important)
             output_ops.push(op.clone()); 
