@@ -257,6 +257,9 @@ impl Brainfuck {
     let mut ops: Vec<Opcode> = brainfuck_tokens(code).map(Opcode::from).collect();
     ops.push(Opcode::Eof);
     self.program = Self::optimize(ops);
+  }
+
+  pub fn _debug(&self) {
     println!("{:?}", &self.program);
   }
 

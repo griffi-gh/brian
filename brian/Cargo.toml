@@ -19,3 +19,10 @@ document-features = "0.2.7"
 arrayvec = "0.7.2"
 itertools = "0.10"
 serde = { version = "1", features = ["derive"], optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.4", features = ["real_blackbox"] }
+
+[[bench]]
+name = "bench"
+harness = false
