@@ -1,6 +1,5 @@
 use std::{collections::HashMap};
-use arrayvec::ArrayVec;
-use itertools::Itertools;
+
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 
