@@ -17,8 +17,6 @@ criterion = { version = "0.4", features = ["real_blackbox"] }
 
 [features]
 default = []
-## Use serde to serialize the interpreter state
-serde = ["dep:serde"]
 ## Apply unsafe optimizations
 unsafe = []
 

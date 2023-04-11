@@ -1,13 +1,9 @@
 use std::{collections::HashMap};
 
-#[cfg(feature = "serde")]
-use serde::{Serialize, Deserialize};
-
 const MEMORY_SIZE: usize = 0xffff;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Token {
   Increment,
   Decrement,
@@ -21,7 +17,6 @@ pub enum Token {
 
 #[repr(u8)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Opcode {
   Increment(isize, isize),
   Set(isize, u8),
@@ -63,7 +58,6 @@ fn brainfuck_tokens(code: &str) -> impl Iterator<Item=Token> + '_ {
 }
 
 #[derive(Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BrainfuckState {
   pub memory: [u8; MEMORY_SIZE],
   pub pointer: usize,
@@ -84,7 +78,6 @@ impl Default for BrainfuckState {
 
 /// Brainfuck interpreter
 #[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Brainfuck {
   state: BrainfuckState,
   program: Vec<Opcode>
