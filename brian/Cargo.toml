@@ -6,20 +6,3 @@ authors = ["griffi-gh <prasol258@gmail.com>"]
 license = "MIT"
 keywords = ["brainfuck", "interpreter"]
 categories = ["compilers"]
-
-
-[dependencies]
-document-features = "0.2.7"
-serde = { version = "1", features = ["derive"], optional = true }
-
-[dev-dependencies]
-criterion = { version = "0.4", features = ["real_blackbox"] }
-
-[features]
-default = []
-## Apply unsafe optimizations
-unsafe = []
-
-[[bench]]
-name = "bench"
-harness = false

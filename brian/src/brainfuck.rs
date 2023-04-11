@@ -1,6 +1,16 @@
-use std::{collections::HashMap};
+use std::{io::{self, Write}, collections::HashMap};
 
+//Warning: please only use values that can be used as bitmasks!
 const MEMORY_SIZE: usize = 0xffff;
+
+macro_rules! safe_unsafe {
+  ($safe: block, $unsafe: block) => {
+    #[cfg(feature="unsafe")]
+    {$unsafe}
+    #[cfg(not(feature="unsafe"))]
+    {$safe}
+  };
+}
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,8 +31,8 @@ pub enum Opcode {
   Increment(isize, isize),
   Set(isize, u8),
   MovePointer(isize),
-  LoopStart(Option<usize>),
-  LoopEnd(Option<usize>),
+  LoopStart(usize),
+  LoopEnd(usize),
   Output(isize),
   Input(isize),
   //Move(usize, ArrayVec::<usize, 16>),
@@ -35,8 +45,8 @@ impl From<Token> for Opcode {
       Token::Decrement => Self::Increment(0, -1),
       Token::MovePointerLeft => Self::MovePointer(-1),
       Token::MovePointerRight => Self::MovePointer(1),
-      Token::LoopStart => Self::LoopStart(None),
-      Token::LoopEnd => Self::LoopEnd(None),
+      Token::LoopStart => Self::LoopStart(0),
+      Token::LoopEnd => Self::LoopEnd(0),
       Token::Output => Self::Output(0),
       Token::Input => Self::Input(0),
     }
@@ -221,32 +231,31 @@ impl Brainfuck {
       }
     }
 
-    //Link loops
-    {
-      let mut stack: Vec<usize> = Vec::new();
-      for index in 0..output_ops.len() {
-        //This is very hacky
-        let (output_ops_before, op) = output_ops.split_at_mut(index);
-        let op = &mut op[0];
-        match op {
-          Opcode::LoopStart(_) => {
-            stack.push(index);
-          },
-          Opcode::LoopEnd(_) => {
-            let start_index = stack.pop().expect("Unexpected loop end");
-            output_ops_before[start_index] = Opcode::LoopStart(Some(index));
-            *op = Opcode::LoopEnd(Some(start_index));
-          }
-          _ => ()
-        }
-      }
-      assert!(stack.is_empty(), "Unclosed loop");
-    }
-
     output_ops
   }
 
-  fn parse_inner(code: &str) -> Vec<Opcode> {
+  fn link_loops(ops: &mut Vec<Opcode>) {
+    let mut stack: Vec<usize> = Vec::new();
+    for index in 0..ops.len() {
+      //This is very hacky
+      let (output_ops_before, op) = ops.split_at_mut(index);
+      let op = &mut op[0];
+      match op {
+        Opcode::LoopStart(_) => {
+          stack.push(index);
+        },
+        Opcode::LoopEnd(_) => {
+          let start_index = stack.pop().expect("Unexpected loop end");
+          output_ops_before[start_index] = Opcode::LoopStart(index);
+          *op = Opcode::LoopEnd(start_index);
+        }
+        _ => ()
+      }
+    }
+    assert!(stack.is_empty(), "Unclosed loop");
+  }
+
+  fn parse(code: &str) -> Vec<Opcode> {
     let mut ops: Vec<Opcode> = brainfuck_tokens(code).map(Opcode::from).collect();
     ops.push(Opcode::Eof);
     ops
@@ -254,21 +263,63 @@ impl Brainfuck {
 
   /// Compile brainfuck source code
   pub fn compile(&mut self, code: &str) {
-    self.program = Self::optimize(Self::parse_inner(code));
+    let mut ops = Self::optimize(Self::parse(code));
+    Self::link_loops(&mut ops);
+    self.program = ops;
   }
 
   /// Compile brainfuck source code without applying any optimizations
   pub fn compile_without_optimizations(&mut self, code: &str) {
-    self.program = Self::parse_inner(code);
+    let mut ops = Self::parse(code);
+    Self::link_loops(&mut ops);
+    self.program = ops;
   }
 
   pub fn _debug(&self) {
     println!("{:?}", &self.program);
   }
 
-  ///Run optimized bf source
+  ///Run brainfuck program after compilation
   pub fn run(&mut self) {
-    todo!();
+    let program_len = self.program.len();
+    let program = &self.program[..];
+    let memory = &mut self.state.memory;
+    let pointer = &mut self.state.pointer;
+    let mut program_counter = 0;
+    loop {
+      let op = &program[program_counter];
+      program_counter += 1;
+      if program_counter > program_len { break }
+      match op {
+        Opcode::Increment(rel_pos, rel_val) => {
+          let pos = pointer.wrapping_add_signed(*rel_pos);
+          memory[pos & MEMORY_SIZE] = memory[pos & MEMORY_SIZE].wrapping_add(*rel_val as u8);
+        },
+        Opcode::Set(rel_pos, val) => {
+          let pos = pointer.wrapping_add_signed(*rel_pos);
+          memory[pos & MEMORY_SIZE] = *val;
+        },
+        Opcode::MovePointer(rel_pos) => {
+          *pointer = pointer.wrapping_add_signed(*rel_pos);
+        },
+        Opcode::LoopStart(end) => {
+          if memory[*pointer & MEMORY_SIZE] == 0 {
+            program_counter = end.wrapping_add(1);
+          }
+        },
+        Opcode::LoopEnd(start) => {
+          if memory[*pointer & MEMORY_SIZE] != 0 {
+            program_counter = start.wrapping_add(1);
+          }
+        },
+        Opcode::Output(rel_pos) => {
+          let pos = pointer.wrapping_add_signed(*rel_pos);
+          io::stdout().write(&[memory[pos & MEMORY_SIZE]]).unwrap();
+        },
+        Opcode::Input(_) => todo!(),
+        Opcode::Eof => break,
+      }
+    }
   }
 }
 impl Default for Brainfuck {
