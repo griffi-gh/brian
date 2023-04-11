@@ -26,6 +26,7 @@ pub enum Opcode {
   LoopEnd(usize),
   Output(isize),
   Input(isize),
+  ScanZero(isize),
   //Move(usize, ArrayVec::<usize, 16>),
   Eof,
 }
@@ -153,7 +154,7 @@ impl Brainfuck {
       let mut ptr_offset: isize = 0;
       let mut index = 0;
 
-      while index < ops.len() {
+      'opt: while index < ops.len() {
         let op = &ops[index];
         index += 1;
         match op {
@@ -209,13 +210,36 @@ impl Brainfuck {
             for effect in &block_effects {
               effect.commit(&mut output_ops);
             }
+            block_effects.clear();
+            //commit pointer movements
             if ptr_offset != 0 {
               output_ops.push(Opcode::MovePointer(ptr_offset));
               ptr_offset = 0;
             }
-            //TODO: figure out a way to avoid clone (low prio; opt times arent that important)
+
+            //Detect zero-scan loops 
+            'outer: {
+              if let Opcode::LoopStart(end) = op {
+                let mut mov_sum = 0;
+                for op in &ops[index..*end] {
+                  match op {
+                    Opcode::MovePointer(mov) => {
+                      mov_sum += *mov;
+                    },
+                    _ => break 'outer
+                  }
+                }
+                if mov_sum == 0 {
+                  break 'outer
+                }
+                output_ops.push(Opcode::ScanZero(mov_sum)); 
+                index = end + 1;
+                continue 'opt
+              }
+            }
+
+            //Push original opcode
             output_ops.push(op.clone()); 
-            block_effects.clear();
           },
           _ => todo!()
         }
@@ -254,7 +278,9 @@ impl Brainfuck {
 
   /// Compile brainfuck source code
   pub fn compile(&mut self, code: &str) {
-    let mut ops = Self::optimize(Self::parse(code));
+    let mut ops = Self::parse(code);
+    Self::link_loops(&mut ops);
+    let mut ops = Self::optimize(ops);
     Self::link_loops(&mut ops);
     self.program = ops;
   }
@@ -302,6 +328,11 @@ impl Brainfuck {
             program_counter = *start;
           }
         },
+        Opcode::ScanZero(direction) => {
+          while memory[*pointer & MEMORY_SIZE] != 0 {
+            *pointer = pointer.wrapping_add_signed(*direction);
+          }
+        }
         Opcode::Output(rel_pos) => {
           let pos = pointer.wrapping_add_signed(*rel_pos);
           io::stdout().write(&[memory[pos & MEMORY_SIZE]]).unwrap();
