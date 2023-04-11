@@ -246,11 +246,20 @@ impl Brainfuck {
     output_ops
   }
 
-  /// Compile a brainfuck source
-  pub fn compile(&mut self, code: &str) {
+  fn parse_inner(code: &str) -> Vec<Opcode> {
     let mut ops: Vec<Opcode> = brainfuck_tokens(code).map(Opcode::from).collect();
     ops.push(Opcode::Eof);
-    self.program = Self::optimize(ops);
+    ops
+  }
+
+  /// Compile brainfuck source code
+  pub fn compile(&mut self, code: &str) {
+    self.program = Self::optimize(Self::parse_inner(code));
+  }
+
+  /// Compile brainfuck source code without applying any optimizations
+  pub fn compile_without_optimizations(&mut self, code: &str) {
+    self.program = Self::parse_inner(code);
   }
 
   pub fn _debug(&self) {
