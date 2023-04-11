@@ -278,9 +278,8 @@ impl Brainfuck {
     let pointer = &mut self.state.pointer;
     let mut program_counter = 0;
     loop {
+      if program_counter >= program_len { break }
       let op = &program[program_counter];
-      program_counter += 1;
-      if program_counter > program_len { break }
       match op {
         Opcode::Increment(rel_pos, rel_val) => {
           let pos = pointer.wrapping_add_signed(*rel_pos);
@@ -295,12 +294,12 @@ impl Brainfuck {
         },
         Opcode::LoopStart(end) => {
           if memory[*pointer & MEMORY_SIZE] == 0 {
-            program_counter = end.wrapping_add(1);
+            program_counter = *end;
           }
         },
         Opcode::LoopEnd(start) => {
           if memory[*pointer & MEMORY_SIZE] != 0 {
-            program_counter = start.wrapping_add(1);
+            program_counter = *start;
           }
         },
         Opcode::Output(rel_pos) => {
@@ -310,6 +309,7 @@ impl Brainfuck {
         Opcode::Input(_) => todo!(),
         Opcode::Eof => break,
       }
+      program_counter += 1;
     }
   }
 }
