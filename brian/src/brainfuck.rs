@@ -3,15 +3,6 @@ use std::{io::{self, Write}, collections::HashMap};
 //Warning: please only use values that can be used as bitmasks!
 const MEMORY_SIZE: usize = 0xffff;
 
-macro_rules! safe_unsafe {
-  ($safe: block, $unsafe: block) => {
-    #[cfg(feature="unsafe")]
-    {$unsafe}
-    #[cfg(not(feature="unsafe"))]
-    {$safe}
-  };
-}
-
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Token {
