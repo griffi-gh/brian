@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-mod interpreter;
+pub mod interpreter;
 
-//Warning: please only use values that can be used as bitmasks!
-const MEMORY_SIZE: usize = 0xffff;
+const MEMORY_MASK: usize = 0xffff;
+const MEMORY_SIZE: usize = MEMORY_MASK + 1;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
